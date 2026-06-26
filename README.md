@@ -191,7 +191,7 @@ ExoFinder trains **3 models** and combines them via **soft-voting ensemble** wei
 | Logistic Regression | 41.23% | ±7.75% |
 
 > [!NOTE]
-> **Honest Performance Disclosure:** The ~45% cross-validation accuracy reflects the genuine difficulty of this classification task on ExoFOP self-labeled data — not a modeling failure. The classes have significant physical overlap: grazing planetary transits resemble eclipsing binaries, and instrumental false positives can mimic shallow transit dips. Our strict regularization ensures **zero overfitting** (train ≈ test accuracy for regularized models), and the 12-feature set is fully interpretable by domain scientists.
+> **Honest Performance Disclosure:** The ~45% cross-validation accuracy reflects the genuine difficulty of this classification task on ExoFOP self-labeled data — not a modeling failure. The classes have significant physical overlap: grazing planetary transits resemble eclipsing binaries, and instrumental false positives can mimic shallow transit dips. Regularization helps limit model complexity on this small sample size (405 stars), though high-capacity tree models (XGBoost/Ensemble) still exhibit training overfitting. Only the linear baseline (Logistic Regression) shows near-perfect generalization (train ≈ test accuracy of ~48%). The 12-feature set remains fully interpretable by domain scientists.
 
 ---
 
