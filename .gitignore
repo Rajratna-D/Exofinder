@@ -1,0 +1,66 @@
+# ==========================================
+# 🪐 ExoFinder: Git Ignore Configuration
+# ==========================================
+
+# --- Python & Bytecode ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+
+# --- Virtual Environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Large Datasets & Data Cache ---
+data/raw/
+data/detrended/
+*.fits
+*.fits.gz
+*.fits.zip
+
+# --- Model Binaries & Large Outputs ---
+outputs/*.pkl
+outputs/*.joblib
+outputs/*.h5
+outputs/plots/
+
+# --- Data Tables Tracking Rules ---
+# Ignore all CSV files by default to prevent accidental data leaks
+*.csv
+# Explicitly track only metadata and prediction results
+!data/labels.csv
+!outputs/predictions.csv
+!outputs/period_search_results.csv
+!outputs/feature_failures.csv
+
+# --- IDE & Editors ---
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# --- OS Metadata ---
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# --- Logs & Secrets ---
+*.log
+.env
+.streamlit/secrets.toml
+
+# --- Reports & Documentation ---
+# Track curated reports but ignore auto-generated ones
+!reports/COMPLETE_PROJECT_GUIDE.md
+!reports/feature_model_explanation.md
+!reports/visualizations.md
+!reports/test_report.md
