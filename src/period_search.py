@@ -153,8 +153,8 @@ def run_period_search_all(labels_path="data/labels.csv", detrended_dir="data/det
             rec_duration = bls_res['duration']
             rec_power = bls_res['power']
             
-            # Calculate error
-            if not np.isnan(rec_period) and not np.isnan(cat_period):
+            # Calculate error (guard against cat_period == 0 or NaN)
+            if not np.isnan(rec_period) and not np.isnan(cat_period) and cat_period > 0:
                 period_error = np.abs(rec_period - cat_period)
                 relative_error = period_error / cat_period
             else:

@@ -51,7 +51,7 @@ def run_script(script_name):
     
     # Use the same python interpreter running this script
     python_exe = sys.executable
-    script_path = os.path.join("src", script_name)
+    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), script_name)
     
     # Run the subprocess redirecting stdout and stderr to a pipe so the child never crashes on closed standard handles.
     process = subprocess.Popen(
@@ -128,7 +128,7 @@ def main():
                 df_labels = pd.DataFrame({
                     'star_id': star_ids,
                     'label': ['confirmed_planet'] * len(star_ids),
-                    'catalog_period': [None] * len(star_ids)
+                    'catalog_period': [0.0] * len(star_ids)
                 })
                 df_labels.to_csv("data/labels.csv", index=False)
                 print(f"Generated placeholder data/labels.csv for {len(star_ids)} stars.")

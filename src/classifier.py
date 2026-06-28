@@ -231,22 +231,22 @@ def train_and_evaluate(features_csv=None, model_output=None, predictions_output=
     print("\nClassification Report (Test Set):")
     print(classification_report(y_test, lr_test_preds, target_names=le.classes_))
     
-    # --- 5-Fold Stratified Cross-Validation (For robust small-sample evaluation) ---
-    print("\n=== 5-Fold Stratified Cross-Validation ===")
+    # --- 5-Fold Stratified Cross-Validation (on training set only to avoid holdout leakage) ---
+    print("\n=== 5-Fold Stratified Cross-Validation (on training set) ===")
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     
     rf_cv_scores = []
     xgb_cv_scores = []
     lr_cv_scores = []
     
-    for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
-        X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
-        y_tr, y_val = y[train_idx], y[val_idx]
+    for fold, (train_idx, val_idx) in enumerate(skf.split(X_train, y_train)):
+        X_tr, X_val = X_train.iloc[train_idx], X_train.iloc[val_idx]
+        y_tr, y_val = y_train[train_idx], y_train[val_idx]
         
         # Scale for CV fold
         scaler_cv = StandardScaler()
-        X_tr_scaled = scaler_cv.fit_transform(X_tr)
-        X_val_scaled = scaler_cv.transform(X_val)
+        X_tr_cv_scaled = scaler_cv.fit_transform(X_tr)
+        X_val_cv_scaled = scaler_cv.transform(X_val)
         
         # Train RF
         rf_cv = RandomForestClassifier(
@@ -257,8 +257,8 @@ def train_and_evaluate(features_csv=None, model_output=None, predictions_output=
             class_weight='balanced', 
             random_state=42
         )
-        rf_cv.fit(X_tr_scaled, y_tr)
-        rf_cv_scores.append(accuracy_score(y_val, rf_cv.predict(X_val_scaled)))
+        rf_cv.fit(X_tr_cv_scaled, y_tr)
+        rf_cv_scores.append(accuracy_score(y_val, rf_cv.predict(X_val_cv_scaled)))
         
         # Train XGB
         xgb_cv = xgb.XGBClassifier(
@@ -273,13 +273,13 @@ def train_and_evaluate(features_csv=None, model_output=None, predictions_output=
             eval_metric='mlogloss'
         )
         sample_weights_tr = compute_sample_weight(class_weight='balanced', y=y_tr)
-        xgb_cv.fit(X_tr_scaled, y_tr, sample_weight=sample_weights_tr)
-        xgb_cv_scores.append(accuracy_score(y_val, xgb_cv.predict(X_val_scaled)))
+        xgb_cv.fit(X_tr_cv_scaled, y_tr, sample_weight=sample_weights_tr)
+        xgb_cv_scores.append(accuracy_score(y_val, xgb_cv.predict(X_val_cv_scaled)))
         
         # Train LR
         lr_cv = LogisticRegression(C=0.1, class_weight='balanced', max_iter=1000, random_state=42)
-        lr_cv.fit(X_tr_scaled, y_tr)
-        lr_cv_scores.append(accuracy_score(y_val, lr_cv.predict(X_val_scaled)))
+        lr_cv.fit(X_tr_cv_scaled, y_tr)
+        lr_cv_scores.append(accuracy_score(y_val, lr_cv.predict(X_val_cv_scaled)))
         
     rf_cv_mean = np.mean(rf_cv_scores)
     xgb_cv_mean = np.mean(xgb_cv_scores)
@@ -318,11 +318,11 @@ def train_and_evaluate(features_csv=None, model_output=None, predictions_output=
     print("\nClassification Report (Test Set):")
     print(classification_report(y_test, ensemble_test_preds, target_names=le.classes_))
     
-    # Run CV for ensemble too
+    # Run CV for ensemble too (on training set only)
     ensemble_cv_scores = []
-    for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
-        X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
-        y_tr, y_val = y[train_idx], y[val_idx]
+    for fold, (train_idx, val_idx) in enumerate(skf.split(X_train, y_train)):
+        X_tr, X_val = X_train.iloc[train_idx], X_train.iloc[val_idx]
+        y_tr, y_val = y_train[train_idx], y_train[val_idx]
         scaler_cv = StandardScaler()
         X_tr_s = pd.DataFrame(scaler_cv.fit_transform(X_tr), columns=X_tr.columns)
         X_val_s = pd.DataFrame(scaler_cv.transform(X_val), columns=X_val.columns)
@@ -346,7 +346,6 @@ def train_and_evaluate(features_csv=None, model_output=None, predictions_output=
             ],
             voting='soft'
         )
-        sw = compute_sample_weight(class_weight='balanced', y=y_tr)
         ens_cv.fit(X_tr_s, y_tr)
         ensemble_cv_scores.append(accuracy_score(y_val, ens_cv.predict(X_val_s)))
     
@@ -421,7 +420,20 @@ def train_and_evaluate(features_csv=None, model_output=None, predictions_output=
     correct_count = (predictions_df['label'] == predictions_df['predicted_label']).sum()
     print(f"Overall training set accuracy: {correct_count}/{len(predictions_df)} ({correct_count/len(predictions_df)*100:.1f}%)")
 
-    # Overwrite reports/validation_metrics_report.md with actual performance metrics of this run
+    # Cache all predictions once to avoid redundant model.predict() calls inside the report f-string
+    rf_train_acc = accuracy_score(y_train, rf_train_preds) * 100
+    xgb_train_acc = accuracy_score(y_train, xgb_train_preds) * 100
+    lr_train_acc = accuracy_score(y_train, lr_train_preds) * 100
+    ens_train_acc = accuracy_score(y_train, ensemble_train_preds) * 100
+    rf_test_acc = accuracy_score(y_test, rf_test_preds) * 100
+    xgb_test_acc = accuracy_score(y_test, xgb_test_preds) * 100
+    lr_test_acc = accuracy_score(y_test, lr_test_preds) * 100
+    
+    rf_test_report = classification_report(y_test, rf_test_preds, target_names=le.classes_)
+    xgb_test_report = classification_report(y_test, xgb_test_preds, target_names=le.classes_)
+    lr_test_report = classification_report(y_test, lr_test_preds, target_names=le.classes_)
+    ens_test_report = classification_report(y_test, ensemble_test_preds, target_names=le.classes_)
+    
     report_content = f"""# Validation Metrics Report (ExoFinder Classifier Tuning)
 
 This report was automatically generated on the final execution of the training pipeline. It compares the performance metrics of four tuned classification models: **Random Forest**, **XGBoost**, **Logistic Regression** (baseline), and **Ensemble (Soft Voting)**.
@@ -434,8 +446,8 @@ Below is the comparison of performance metrics of the models on the {len(feature
 
 | Metric | Random Forest | XGBoost | Logistic Regression | Ensemble |
 | :--- | :--- | :--- | :--- | :--- |
-| **Train Accuracy** ({len(X_train)} stars) | {accuracy_score(y_train, rf.predict(X_train_scaled))*100:.1f}% | {accuracy_score(y_train, xgb_clf.predict(X_train_scaled))*100:.1f}% | {accuracy_score(y_train, lr.predict(X_train_scaled))*100:.1f}% | {accuracy_score(y_train, ensemble.predict(X_train_scaled))*100:.1f}% |
-| **Test Accuracy** ({len(X_test)} stars) | {accuracy_score(y_test, rf.predict(X_test_scaled))*100:.1f}% | {accuracy_score(y_test, xgb_clf.predict(X_test_scaled))*100:.1f}% | {accuracy_score(y_test, lr.predict(X_test_scaled))*100:.1f}% | {ensemble_test_acc*100:.1f}% |
+| **Train Accuracy** ({len(X_train)} stars) | {rf_train_acc:.1f}% | {xgb_train_acc:.1f}% | {lr_train_acc:.1f}% | {ens_train_acc:.1f}% |
+| **Test Accuracy** ({len(X_test)} stars) | {rf_test_acc:.1f}% | {xgb_test_acc:.1f}% | {lr_test_acc:.1f}% | {ensemble_test_acc*100:.1f}% |
 | **5-Fold Stratified CV Accuracy** | **{rf_cv_mean*100:.1f}% ± {np.std(rf_cv_scores)*100:.1f}%** | **{xgb_cv_mean*100:.1f}% ± {np.std(xgb_cv_scores)*100:.1f}%** | **{lr_cv_mean*100:.1f}% ± {np.std(lr_cv_scores)*100:.1f}%** | **{ensemble_cv_mean*100:.1f}% ± {np.std(ensemble_cv_scores)*100:.1f}%** |
 
 ### Selected Best Model for Deployment: **{best_model_name}**
@@ -447,23 +459,19 @@ The model with the highest 5-Fold CV accuracy (**{cv_means[best_model_name]*100:
 
 ### Random Forest
 ```
-{classification_report(y_test, rf.predict(X_test_scaled), target_names=le.classes_)}
-```
+{rf_test_report}```
 
 ### XGBoost
 ```
-{classification_report(y_test, xgb_clf.predict(X_test_scaled), target_names=le.classes_)}
-```
+{xgb_test_report}```
 
 ### Logistic Regression
 ```
-{classification_report(y_test, lr.predict(X_test_scaled), target_names=le.classes_)}
-```
+{lr_test_report}```
 
 ### Ensemble (Soft Voting)
 ```
-{classification_report(y_test, ensemble.predict(X_test_scaled), target_names=le.classes_)}
-```
+{ens_test_report}```
 
 ---
 

@@ -1,4 +1,5 @@
 import os
+import textwrap
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -188,6 +189,7 @@ PREDICTIONS_PATH = os.path.join(PROJECT_ROOT, "outputs", "predictions.csv")
 RAW_DIR = os.path.join(PROJECT_ROOT, "data", "raw")
 DETRENDED_DIR = os.path.join(PROJECT_ROOT, "data", "detrended")
 
+@st.cache_data
 def load_predictions():
     if not os.path.exists(PREDICTIONS_PATH):
         return None
@@ -214,7 +216,7 @@ def fold_lc(time, flux, period, epoch):
     return phase[sort_idx], flux[sort_idx]
 
 def get_binned_profile(phase, flux, num_bins=80):
-    bins = np.linspace(-0.25, 0.25, num_bins)
+    bins = np.linspace(-0.15, 0.15, num_bins)
     bin_centers = 0.5 * (bins[:-1] + bins[1:])
     binned_flux = []
     for i in range(len(bins)-1):
@@ -257,7 +259,7 @@ def main():
     for class_name, count in class_counts.items():
         st.sidebar.markdown(f"**{class_name.replace('_', ' ').title()}**: {count}")
         
-    import textwrap
+
     
     if page == "Dashboard Summary":
         # ==========================================
@@ -435,7 +437,7 @@ def main():
         
         if not (os.path.exists(raw_path) and os.path.exists(det_path)):
             st.error(f"Data files for TIC {selected_id} are missing. Please verify the raw and detrended directories.")
-            return
+            st.stop()
             
         df_raw = pd.read_csv(raw_path)
         df_det = pd.read_csv(det_path)

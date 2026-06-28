@@ -48,25 +48,34 @@ def detrend_light_curve(df, window_length=1001, polyorder=2, gap_threshold=0.5):
     detrended_segments = []
     
     for seg in segments:
-        if len(seg) < window_length:
-            # If segment is too short for the window, adjust window length
+        # Adaptively cap window length to ~15% of segment length (minimum 51, must be odd)
+        adaptive_window = min(window_length, max(51, int(len(seg) * 0.15)))
+        if adaptive_window % 2 == 0:
+            adaptive_window -= 1
+        
+        if len(seg) < adaptive_window:
+            # If segment is too short for the adaptive window, adjust further
             seg_window = len(seg)
             if seg_window % 2 == 0:
                 seg_window -= 1
             if seg_window <= polyorder:
-                # If segment is too small to fit the polynomial, skip detrending
+                # Segment too small to fit polynomial — normalize by median
                 seg = seg.copy()
-                seg['trend'] = np.median(seg['flux'])
-                seg['detrended_flux'] = seg['flux'] / seg['trend']
+                median_val = np.median(seg['flux'])
+                median_val = median_val if median_val > 0 else 1.0
+                seg['trend'] = median_val
+                seg['detrended_flux'] = seg['flux'] / median_val
                 detrended_segments.append(seg)
                 continue
         else:
-            seg_window = window_length
+            seg_window = adaptive_window
             
         # Apply Savitzky-Golay filter to the segment
         seg = seg.copy()
         try:
             trend = savgol_filter(seg['flux'].values, window_length=seg_window, polyorder=polyorder)
+            # Guard against zero or negative trend values (prevent division issues)
+            trend = np.where(trend <= 0, np.median(seg['flux']), trend)
             seg['trend'] = trend
             # Normalize flux by dividing by the trend
             seg['detrended_flux'] = seg['flux'].values / trend
@@ -74,6 +83,7 @@ def detrend_light_curve(df, window_length=1001, polyorder=2, gap_threshold=0.5):
             # Fallback if SG filter fails
             print(f"Warning: SG filter failed for a segment: {e}. Falling back to median.")
             median_val = np.median(seg['flux'])
+            median_val = median_val if median_val > 0 else 1.0
             seg['trend'] = median_val
             seg['detrended_flux'] = seg['flux'] / median_val
             

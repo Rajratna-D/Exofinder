@@ -175,17 +175,19 @@ def extract_features_for_star(star_id, label, cat_period, bls_row, detrended_df,
     # Calculate secondary_eclipse_check
     secondary_eclipse_check = 0.0
     try:
-        clean_mask = np.isfinite(time) & np.isfinite(flux)
-        t_clean = time[clean_mask]
-        f_clean = flux[clean_mask]
-        if len(t_clean) >= 100:
-            dy_clean = detrended_df['flux_err'].values[clean_mask] if 'flux_err' in detrended_df.columns else None
-            bls_sec = BoxLeastSquares(t_clean, f_clean, dy=dy_clean)
-            duration_grid = np.linspace(0.01, min(0.25, max(0.02, period / 4.0)), 10)
-            results_sec = bls_sec.power([period / 2.0], duration_grid)
-            peak_power = float(np.nanmax(results_sec.power))
-            if not np.isnan(peak_power):
-                secondary_eclipse_check = peak_power
+        # Only check for secondary eclipse if period/2 is physically meaningful (>= 0.5 days)
+        if period / 2.0 >= 0.5:
+            clean_mask = np.isfinite(time) & np.isfinite(flux)
+            t_clean = time[clean_mask]
+            f_clean = flux[clean_mask]
+            if len(t_clean) >= 100:
+                dy_clean = detrended_df['flux_err'].values[clean_mask] if 'flux_err' in detrended_df.columns else None
+                bls_sec = BoxLeastSquares(t_clean, f_clean, dy=dy_clean)
+                duration_grid = np.linspace(0.01, min(0.25, max(0.02, period / 4.0)), 10)
+                results_sec = bls_sec.power([period / 2.0], duration_grid)
+                peak_power = float(np.nanmax(results_sec.power))
+                if not np.isnan(peak_power):
+                    secondary_eclipse_check = peak_power
     except Exception:
         secondary_eclipse_check = 0.0
     

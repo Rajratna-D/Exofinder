@@ -73,10 +73,10 @@ def fetch_labeled_list(num_per_class=10):
     df_eb = df_eb.drop_duplicates(subset=['TIC ID'])
     df_fp = df_fp.drop_duplicates(subset=['TIC ID'])
     
-    # Take a sample of each class
-    sample_cp = df_cp.head(num_per_class).copy()
-    sample_eb = df_eb.head(num_per_class).copy()
-    sample_fp = df_fp.head(num_per_class).copy()
+    # Take a random sample of each class (with fallback if fewer entries exist)
+    sample_cp = df_cp.sample(n=min(num_per_class, len(df_cp)), random_state=42).copy()
+    sample_eb = df_eb.sample(n=min(num_per_class, len(df_eb)), random_state=42).copy()
+    sample_fp = df_fp.sample(n=min(num_per_class, len(df_fp)), random_state=42).copy()
     
     # Combine the samples
     combined = pd.concat([sample_cp, sample_eb, sample_fp], ignore_index=True)
