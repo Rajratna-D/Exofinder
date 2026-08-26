@@ -1,5 +1,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white" alt="PyTorch">
   <img src="https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" alt="Streamlit">
   <img src="https://img.shields.io/badge/scikit--learn-ML-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white" alt="scikit-learn">
   <img src="https://img.shields.io/badge/XGBoost-Ensemble-006400?style=for-the-badge&logo=xgboost&logoColor=white" alt="XGBoost">
@@ -121,15 +122,15 @@ graph LR
 | **1. Acquisition** | `src/data_loader.py` | Fetches balanced star labels from ExoFOP TOI catalog (with NASA Exoplanet Archive fallback). Downloads SPOC-calibrated light curves from MAST via `lightkurve`. Parallel downloads with 10 workers. |
 | **2. Detrending** | `src/detrend.py` | Detects data downlink gaps (>0.5 days) and splits the time series into contiguous segments. Applies a Savitzky-Golay quadratic filter independently per segment to eliminate boundary artifacts. |
 | **3. Period Search** | `src/period_search.py` | Runs Astropy's Box Least Squares (BLS) periodogram over an auto-generated frequency grid. Recovers candidate orbital period, transit epoch ($T_0$), depth, and duration. |
-| **4. Feature Extraction** | `src/features.py` | Computes 12 physically interpretable features from the phase-folded light curve — transit shape metrics, noise statistics, and derived ratios. |
-| **5. Classification** | `src/classifier.py` | Trains RF, XGBoost, and Logistic Regression with SMOTE oversampling. Builds a soft-voting ensemble. Selects best model via 5-fold stratified CV. |
+| **4. Feature Extraction** | `src/features.py` | Computes 14 physically interpretable features from the phase-folded light curve — transit shape metrics, odd/even transit symmetry, noise statistics, and derived ratios. |
+| **5. Classification** | `src/classifier.py` | Runs `RandomizedSearchCV` hyperparameter optimization, trains a `StackingClassifier` with a meta-learner, calibrates confidence probabilities via `CalibratedClassifierCV`, and validates on 5-fold stratified CV. |
 | **6. Dashboard** | `app.py` | Space-themed Streamlit UI with glassmorphism cards, interactive star selector, and real-time light curve visualizations. |
 
 ---
 
-## 🧬 Feature Engineering (12 Features)
+## 🧬 Feature Engineering (14 Features)
 
-The classifier operates on **12 physically interpretable features** — no black-box representations:
+The classifier operates on **14 physically interpretable features** — strictly domain-grounded:
 
 | # | Feature | Physical Meaning |
 |:-:|:--------|:-----------------|
@@ -145,53 +146,75 @@ The classifier operates on **12 physically interpretable features** — no black
 | 10 | `secondary_eclipse_check` | BLS power at half-period (detects EB secondary eclipses) |
 | 11 | `period_ratio` | BLS period / catalog period (recovery accuracy proxy) |
 | 12 | `depth_to_noise` | Transit depth / detrended scatter (alt. significance) |
+| 13 | `odd_even_depth_ratio` | Odd vs. even transit depth ratio (Gold standard EB discriminator) |
+| 14 | `odd_even_mismatch_sigma` | Statistical significance of odd-even depth mismatch ($\sigma$) |
 
 ---
 
-## 🤖 Model Architecture & Performance
+## 🤖 Model Architecture & Calibration
 
-### Ensemble Classifier
-ExoFinder trains **3 models** and combines them via **soft-voting ensemble** weighted by cross-validation accuracy:
+### Stacking Ensemble & Calibration Pipeline
+ExoFinder tunes **3 base models** with `RandomizedSearchCV`, stacks them using a **Logistic Regression Meta-Learner**, and applies **Platt Sigmoid Calibration** (`CalibratedClassifierCV`):
 
 ```
-                    ┌──────────────────────┐
-                    │   Random Forest      │ n=150, depth=4, balanced
-                    │   (43.95% CV)        │
-                    ├──────────────────────┤
-  Features ────────>│   XGBoost            │ n=80, depth=4, L1+L2 reg
-  (12-dim)          │   (45.43% CV)  ★     │
-                    ├──────────────────────┤
-                    │   Logistic Reg.      │ C=0.1, balanced
-                    │   (41.23% CV)        │
-                    └──────┬───────────────┘
-                           │ Soft Vote (CV-weighted)
-                           ▼
-                    ┌──────────────────────┐
-                    │   Ensemble           │
-                    │   (44.94% CV)        │
-                    └──────────────────────┘
+                    ┌────────────────────────┐
+                    │   Random Forest (Tuned)│ RandomizedSearchCV (n=150, d=6)
+                    │   (47.83% CV)    ★     │
+                    ├────────────────────────┤
+  Features ────────>│   XGBoost (Tuned)      │ RandomizedSearchCV (n=80, d=4)
+  (14-dim)          │   (45.06% CV)          │
+                    ├────────────────────────┤
+                    │   Logistic Reg. (Tuned)│ RandomizedSearchCV (C=1.0)
+                    │   (41.69% CV)          │
+                    └───────────┬────────────┘
+                                │ Out-of-fold Probabilities
+                                ▼
+                    ┌────────────────────────┐
+                    │   Stacking Meta-Learner│ LogisticRegression (C=1.0)
+                    │   (41.97% CV)          │
+                    └───────────┬────────────┘
+                                │ Platt Sigmoid Calibration
+                                ▼
+                    ┌────────────────────────┐
+                    │   Calibrated Stacking  │ CalibratedClassifierCV
+                    │   (44.12% CV)          │ True Posterior Probabilities
+                    └────────────────────────┘
 ```
 
-### Overfitting Control
+### Advanced ML Controls
 | Technique | Details |
 |:----------|:--------|
-| **SMOTE** | Synthetic minority oversampling on training folds (adaptive `k_neighbors`) |
-| **Class Balancing** | `class_weight='balanced'` (RF, LR) + computed sample weights (XGB) |
-| **Regularization** | XGB: `subsample=0.8`, `colsample_bytree=0.8`, L1=0.3, L2=1.5 |
-| **Shallow Trees** | `max_depth=4`, `min_samples_leaf=3` to prevent memorization |
-| **Standard Scaling** | Fit on train set only, applied to test/validation sets |
-
-### Results on 405 Stars (5-Fold Stratified CV)
-
-| Model | CV Accuracy | Std Dev |
-|:------|:------------|:--------|
-| **XGBoost** | **45.43%** | ±3.94% |
-| **Ensemble** | **44.94%** | ±4.03% |
-| Random Forest | 43.95% | ±2.15% |
-| Logistic Regression | 41.23% | ±7.75% |
+| **Odd/Even Vetting** | Isolates cycle-by-cycle transits to catch alternating primary/secondary stellar eclipses |
+| **Hyperparameter Search** | 5-fold stratified `RandomizedSearchCV` for depth, regularization ($\alpha, \lambda$), and estimators |
+| **Meta-Learning Stacking** | Stacking ensemble learns optimal non-linear blending weights from out-of-fold CV predictions |
+| **Probability Calibration** | Platt scaling transforms raw tree votes into reliable posterior probabilities |
+| **Standard Scaling** | Fit on training fold only, strictly preventing holdout leakage |
 
 > [!NOTE]
 > **Honest Performance Disclosure:** The ~45% cross-validation accuracy reflects the genuine difficulty of this classification task on ExoFOP self-labeled data — not a modeling failure. The classes have significant physical overlap: grazing planetary transits resemble eclipsing binaries, and instrumental false positives can mimic shallow transit dips. Regularization helps limit model complexity on this small sample size (405 stars), though high-capacity tree models (XGBoost/Ensemble) still exhibit training overfitting. Only the linear baseline (Logistic Regression) shows near-perfect generalization (train ≈ test accuracy of ~48%). The 12-feature set remains fully interpretable by domain scientists.
+
+---
+
+## 🧠 NASA Astronet 1D-CNN Deep Learning
+
+ExoFinder incorporates a **Dual-Branch 1D-Convolutional Neural Network** with multi-modal tabular fusion (*inspired by Google Brain / NASA Shallue & Vanderburg 2018*):
+
+```
+Global View (201 bins) ──> [ Conv1D x3 + Pool ] ──> 640-dim ──┐
+                                                              │
+Local Zoom (61 bins)   ──> [ Conv1D x3 + Pool ] ──> 640-dim ──┼──> [ Concat (1312) ] ──> [ Dense x3 ] ──> Softmax Output
+                                                              │
+Tabular (14 features)  ──> [ Dense + BatchNorm ] ──> 32-dim  ──┘
+```
+
+| Model Architecture | 5-Fold Stratified CV Accuracy | Holdout Test Set Accuracy | Confirmed Planet Recall |
+| :--- | :--- | :--- | :--- |
+| **NASA Astronet 1D-CNN** | **53.09% ± 2.19%** ★ | **46.91%** | **81.0%** |
+| **Random Forest (Tuned)** | **47.83% ± 2.61%** | **44.44%** | 63.0% |
+| **Calibrated Stacking ML** | **44.12% ± 3.84%** | **44.44%** | 59.3% |
+
+- **Astronomical Augmentation**: Dynamic phase jittering, photon noise injection, and depth scaling prevent overfitting.
+- **Interactive Multi-Scale View**: The Streamlit dashboard allows astronomers to toggle between Stacking ML and 1D-CNN Deep Learning predictions in real time.
 
 ---
 

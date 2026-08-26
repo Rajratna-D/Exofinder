@@ -90,7 +90,9 @@ def extract_features_for_star(star_id, label, cat_period, bls_row, detrended_df,
             'ingress_egress_symmetry': 0.0,
             'secondary_eclipse_check': 0.0,
             'period_ratio': 0.0,
-            'depth_to_noise': 0.0
+            'depth_to_noise': 0.0,
+            'odd_even_depth_ratio': 1.0,
+            'odd_even_mismatch_sigma': 0.0
         }
         
     # Calculate phase folding to isolate in-transit vs out-of-transit points
@@ -172,7 +174,40 @@ def extract_features_for_star(star_id, label, cat_period, bls_row, detrended_df,
         else:
             ingress_egress_symmetry = abs(skew_left) - abs(skew_right)
 
-    # Calculate secondary_eclipse_check
+    # 4. Odd vs Even Transit Depth Analysis (Critical EB Discriminator)
+    transit_cycle = np.round((time - epoch) / period).astype(int)
+    even_transit_mask = in_transit_mask & (transit_cycle % 2 == 0)
+    odd_transit_mask = in_transit_mask & (transit_cycle % 2 != 0)
+    
+    even_flux = flux[even_transit_mask]
+    odd_flux = flux[odd_transit_mask]
+    
+    if len(even_flux) >= 3:
+        depth_even = max(0.0, 1.0 - float(np.median(even_flux)))
+        std_even = float(np.std(even_flux)) if len(even_flux) > 1 else std_oot
+    else:
+        depth_even = depth
+        std_even = std_oot
+        
+    if len(odd_flux) >= 3:
+        depth_odd = max(0.0, 1.0 - float(np.median(odd_flux)))
+        std_odd = float(np.std(odd_flux)) if len(odd_flux) > 1 else std_oot
+    else:
+        depth_odd = depth
+        std_odd = std_oot
+        
+    max_d = max(depth_odd, depth_even)
+    min_d = min(depth_odd, depth_even)
+    odd_even_depth_ratio = (min_d / max_d) if max_d > 1e-6 else 1.0
+    if np.isnan(odd_even_depth_ratio):
+        odd_even_depth_ratio = 1.0
+        
+    err_denom = np.sqrt((std_odd**2 / max(1, len(odd_flux))) + (std_even**2 / max(1, len(even_flux))))
+    odd_even_mismatch_sigma = float(np.abs(depth_odd - depth_even) / err_denom) if err_denom > 1e-6 else 0.0
+    if np.isnan(odd_even_mismatch_sigma):
+        odd_even_mismatch_sigma = 0.0
+
+    # 5. Secondary Eclipse Check
     secondary_eclipse_check = 0.0
     try:
         # Only check for secondary eclipse if period/2 is physically meaningful (>= 0.5 days)
@@ -210,7 +245,9 @@ def extract_features_for_star(star_id, label, cat_period, bls_row, detrended_df,
         'ingress_egress_symmetry': ingress_egress_symmetry,
         'secondary_eclipse_check': secondary_eclipse_check,
         'period_ratio': period / cat_period if cat_period > 0 and not np.isnan(cat_period) else 0.0,
-        'depth_to_noise': depth / std_detrend if std_detrend > 0 else 0.0
+        'depth_to_noise': depth / std_detrend if std_detrend > 0 else 0.0,
+        'odd_even_depth_ratio': odd_even_depth_ratio,
+        'odd_even_mismatch_sigma': odd_even_mismatch_sigma
     }
 
 

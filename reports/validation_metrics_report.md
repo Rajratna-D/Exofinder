@@ -1,86 +1,85 @@
-# Validation Metrics Report (ExoFinder Classifier Tuning)
+# Validation Metrics Report (ExoFinder Stacking & Calibration)
 
-This report was automatically generated on the final execution of the training pipeline. It compares the performance metrics of four tuned classification models: **Random Forest**, **XGBoost**, **Logistic Regression** (baseline), and **Ensemble (Soft Voting)**.
+This report was automatically generated following hyperparameter optimization, stacking ensembling, and probability calibration across the 405-target dataset.
 
 ---
 
 ## 1. Classifier Performance Comparison
 
-Below is the comparison of performance metrics of the models on the 12 tabular features:
+Below is the comparison of performance metrics of all tuned models across the **14 physical features**:
 
-| Metric | Random Forest | XGBoost | Logistic Regression | Ensemble |
-| :--- | :--- | :--- | :--- | :--- |
-| **Train Accuracy** (324 stars) | 71.9% | 97.2% | 48.8% | 90.1% |
-| **Test Accuracy** (81 stars) | 40.7% | 46.9% | 48.1% | 49.4% |
-| **5-Fold Stratified CV Accuracy** | **44.0% ± 2.2%** | **45.4% ± 3.9%** | **41.2% ± 7.8%** | **44.9% ± 4.0%** |
+| Model Architecture | Train Accuracy (525 stars) | Test Accuracy (132 stars) | 5-Fold Stratified CV Accuracy |
+| :--- | :--- | :--- | :--- |
+| **Random Forest (Tuned)** | 82.9% | 50.8% | **46.7% ± 4.0%** |
+| **XGBoost (Tuned)** | 81.7% | 47.7% | **45.9% ± 4.5%** |
+| **Logistic Regression (Tuned)** | 44.0% | 34.8% | **41.9% ± 2.8%** |
+| **Stacking Classifier (Meta-LR)** | 81.5% | 50.8% | **47.6% ± 5.2%** |
+| **Calibrated Stacking (Platt Sigmoid)** | 80.6% | 50.0% | **46.9% ± 5.0%** |
 
-### Selected Best Model for Deployment: **XGBoost**
-The model with the highest 5-Fold CV accuracy (**45.4%**) was selected and saved to `outputs/model.pkl`.
+### Selected Deployed Model: **Calibrated Stacking**
+Saved to `outputs/model.pkl` with Platt-calibrated probability mappings.
 
 ---
 
 ## 2. Test Set Classification Reports
 
-### Random Forest
+### Calibrated Stacking Ensemble (Production Model)
 ```
                   precision    recall  f1-score   support
 
-confirmed_planet       0.52      0.56      0.54        27
-eclipsing_binary       0.33      0.30      0.31        27
-  false_positive       0.36      0.37      0.36        27
+confirmed_planet       0.52      0.37      0.43        38
+eclipsing_binary       0.49      0.73      0.59        49
+  false_positive       0.52      0.36      0.42        45
 
-        accuracy                           0.41        81
-       macro avg       0.40      0.41      0.40        81
-    weighted avg       0.40      0.41      0.40        81
-
+        accuracy                           0.50       132
+       macro avg       0.51      0.49      0.48       132
+    weighted avg       0.51      0.50      0.48       132
 ```
 
-### XGBoost
-```
-                  precision    recall  f1-score   support
-
-confirmed_planet       0.50      0.63      0.56        27
-eclipsing_binary       0.43      0.22      0.29        27
-  false_positive       0.45      0.56      0.50        27
-
-        accuracy                           0.47        81
-       macro avg       0.46      0.47      0.45        81
-    weighted avg       0.46      0.47      0.45        81
-
-```
-
-### Logistic Regression
+### Stacking Ensemble (Pre-calibration)
 ```
                   precision    recall  f1-score   support
 
-confirmed_planet       0.40      0.44      0.42        27
-eclipsing_binary       0.54      0.48      0.51        27
-  false_positive       0.52      0.52      0.52        27
+confirmed_planet       0.54      0.37      0.44        38
+eclipsing_binary       0.50      0.69      0.58        49
+  false_positive       0.50      0.42      0.46        45
 
-        accuracy                           0.48        81
-       macro avg       0.49      0.48      0.48        81
-    weighted avg       0.49      0.48      0.48        81
-
+        accuracy                           0.51       132
+       macro avg       0.51      0.49      0.49       132
+    weighted avg       0.51      0.51      0.50       132
 ```
 
-### Ensemble (Soft Voting)
+### Tuned XGBoost
 ```
                   precision    recall  f1-score   support
 
-confirmed_planet       0.52      0.59      0.55        27
-eclipsing_binary       0.47      0.33      0.39        27
-  false_positive       0.48      0.56      0.52        27
+confirmed_planet       0.53      0.50      0.51        38
+eclipsing_binary       0.47      0.55      0.51        49
+  false_positive       0.44      0.38      0.40        45
 
-        accuracy                           0.49        81
-       macro avg       0.49      0.49      0.49        81
-    weighted avg       0.49      0.49      0.49        81
+        accuracy                           0.48       132
+       macro avg       0.48      0.48      0.48       132
+    weighted avg       0.48      0.48      0.47       132
+```
 
+### Tuned Random Forest
+```
+                  precision    recall  f1-score   support
+
+confirmed_planet       0.50      0.39      0.44        38
+eclipsing_binary       0.52      0.61      0.56        49
+  false_positive       0.50      0.49      0.49        45
+
+        accuracy                           0.51       132
+       macro avg       0.51      0.50      0.50       132
+    weighted avg       0.51      0.51      0.50       132
 ```
 
 ---
 
-## 3. Discussion & Observations
-- **Regularization & Scaling**: Standard scaling was applied to all features, fitting only on the training set/fold. Strict regularization parameters were added to both Random Forest (`max_depth=4`, `min_samples_leaf=3`) and XGBoost (`subsample=0.8`, `colsample_bytree=0.8`, `reg_alpha=0.3`, `reg_lambda=1.5`), which drastically reduces overfitting compared to previous runs.
-- **Class Balancing**: Balanced weights were incorporated for all models (including XGBoost sample weights). SMOTE oversampling was applied to the training set when `imbalanced-learn` is available, ensuring the classifier is not biased towards any dominant class.
-- **Ensemble**: A soft-voting ensemble combines predictions from all three models, weighted by their individual CV accuracies.
-- **Feature Set**: The model uses a 12-feature set focusing on transit physical shape and significance: bls_depth, bls_duration, bls_power, transit_snr, mean_to_max_depth_ratio, in_transit_skew, in_transit_kurtosis, flux_kurtosis, ingress_egress_symmetry, secondary_eclipse_check, period_ratio, depth_to_noise.
+## 3. Key Enhancements & Methodology
+1. **Odd/Even Transit Depth Analysis**: Evaluates odd-cycle vs. even-cycle transit depth ratios and difference significance (sigma) to separate Eclipsing Binaries from transiting planets.
+2. **Automated Hyperparameter Optimization**: `RandomizedSearchCV` explores regularization, tree depth, and learning rates under stratified cross-validation.
+3. **Stacking Ensemble**: Replaced manual heuristic voting with `StackingClassifier`, allowing a Logistic Regression meta-learner to learn optimal non-linear blending weights.
+4. **Probability Calibration**: `CalibratedClassifierCV` transforms raw model decision margins into well-calibrated posterior probabilities.
+5. **Physical Feature Set (14 features)**: bls_depth, bls_duration, bls_power, transit_snr, mean_to_max_depth_ratio, in_transit_skew, in_transit_kurtosis, flux_kurtosis, ingress_egress_symmetry, secondary_eclipse_check, period_ratio, depth_to_noise, odd_even_depth_ratio, odd_even_mismatch_sigma.

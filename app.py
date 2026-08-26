@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
+from src.deep_learning import generate_binned_views
 
 # 1. Set page config for a premium wide layout
 st.set_page_config(
@@ -241,6 +242,20 @@ def main():
     page = st.sidebar.radio("Go to:", ["Dashboard Summary", "Stellar Inspector"])
     st.sidebar.markdown("---")
     
+    # Model Architecture Selector
+    st.sidebar.markdown("### Model Architecture")
+    model_choice = st.sidebar.selectbox(
+        "Active Classifier",
+        ["1D-CNN Deep Learning (NASA Astronet)", "Stacking ML Ensemble (Tuned RF+XGB+LR)"],
+        index=0,
+        help="Switch between the Deep Learning 1D-CNN (Global + Local view fusion) and the Stacking ML Ensemble (14 physical shape features)."
+    )
+    is_cnn = "1D-CNN" in model_choice
+    pred_col = 'predicted_label_cnn' if (is_cnn and 'predicted_label_cnn' in preds_df.columns) else 'predicted_label'
+    conf_col = 'confidence_cnn' if (is_cnn and 'confidence_cnn' in preds_df.columns) else 'confidence'
+    
+    st.sidebar.markdown("---")
+    
     # Filter selection
     st.sidebar.markdown("### Filters")
     filter_sig = st.sidebar.checkbox(
@@ -254,8 +269,8 @@ def main():
     st.sidebar.success(f"Active ({len(preds_df)} Stars Processed)")
     
     # Class count summary in Sidebar
-    st.sidebar.markdown("### Dataset Summary")
-    class_counts = preds_df['predicted_label'].value_counts()
+    st.sidebar.markdown(f"### Dataset Summary ({'1D-CNN' if is_cnn else 'Stacking ML'})")
+    class_counts = preds_df[pred_col].value_counts()
     for class_name, count in class_counts.items():
         st.sidebar.markdown(f"**{class_name.replace('_', ' ').title()}**: {count}")
         
@@ -358,17 +373,18 @@ def main():
             """))
             
         with panel_col2:
+            model_tag = "1D-CNN" if is_cnn else "Stacking ML"
             if filter_sig:
-                st.markdown("### Top 5 High-Significance Planet Candidates")
+                st.markdown(f"### Top 5 High-Significance Planet Candidates ({model_tag})")
                 cp_candidates = preds_df[
-                    (preds_df['predicted_label'] == 'confirmed_planet') & 
+                    (preds_df[pred_col] == 'confirmed_planet') & 
                     (preds_df['significance'] == 'high')
                 ].copy()
             else:
-                st.markdown("### Top 5 Confirmed Planet Candidates (All)")
-                cp_candidates = preds_df[preds_df['predicted_label'] == 'confirmed_planet'].copy()
+                st.markdown(f"### Top 5 Confirmed Planet Candidates (All - {model_tag})")
+                cp_candidates = preds_df[preds_df[pred_col] == 'confirmed_planet'].copy()
                 
-            top5 = cp_candidates.sort_values(by='confidence', ascending=False).head(5)
+            top5 = cp_candidates.sort_values(by=conf_col, ascending=False).head(5)
             
             if len(top5) == 0:
                 st.info("No candidates matching the criteria found.")
@@ -378,7 +394,7 @@ def main():
                     tic_id = int(row['star_id'])
                     period = f"{row['bls_period']:.5f} days"
                     depth = f"{row['bls_depth']*100:.4f}% ({row['bls_depth']*1e6:.0f} ppm)"
-                    conf_score = f"{row['confidence']*100:.1f}%"
+                    conf_score = f"{row[conf_col]*100:.1f}%"
                     status = row['significance'].replace('_', ' ').title()
                     status_badge = f'<span class="badge badge-{row["significance"]}">{status}</span>'
                     
@@ -427,8 +443,8 @@ def main():
         star_row = preds_df[preds_df['star_id'] == selected_id].iloc[0]
         
         true_label = star_row['label']
-        pred_label = star_row['predicted_label']
-        confidence = star_row['confidence']
+        pred_label = star_row.get(pred_col, star_row['predicted_label'])
+        confidence = star_row.get(conf_col, star_row['confidence'])
         sig_status = star_row['significance']
         
         # Load light curve data
@@ -451,9 +467,10 @@ def main():
             
             # Display Prediction Badge
             badge_class = f"badge-{pred_label}"
+            model_tag = "1D-CNN" if is_cnn else "Stacking ML"
             st.html(textwrap.dedent(f"""
             <div class="card">
-                <div class="metric-lbl">Model Prediction</div>
+                <div class="metric-lbl">{model_tag} Prediction</div>
                 <div class="metric-val" style="margin-bottom: 0.5rem;">{pred_label.replace('_', ' ').title()}</div>
                 <span class="badge {badge_class}">Classification</span>
             </div>
@@ -462,7 +479,7 @@ def main():
             # Confidence Score
             st.html(textwrap.dedent(f"""
             <div class="card">
-                <div class="metric-lbl">Confidence Score</div>
+                <div class="metric-lbl">{model_tag} Confidence</div>
                 <div class="metric-val" style="color: #f59e0b;">{confidence*100:.1f}%</div>
                 <div style="margin-top: 0.5rem; background-color: #374151; height: 8px; border-radius: 4px; overflow: hidden;">
                     <div style="background-color: #f59e0b; width: {confidence*100}%; height: 100%;"></div>
@@ -472,10 +489,11 @@ def main():
             
 
         with inspector_col2:
-            tab_charts, tab_params, tab_shape = st.tabs([
+            tab_charts, tab_params, tab_shape, tab_cnn = st.tabs([
                 "📈 Light Curve Charts",
                 "📋 Recovered Physical Parameters",
-                "📊 Transit Shape Metrics"
+                "📊 Transit Shape Metrics",
+                "🧠 1D-CNN Multi-Scale Views"
             ])
             
             with tab_charts:
@@ -575,8 +593,17 @@ def main():
                     
             with tab_shape:
                 st.markdown("### Transit Shape Metrics")
+                odd_even_ratio = star_row.get('odd_even_depth_ratio', 1.0)
+                if pd.isna(odd_even_ratio):
+                    odd_even_ratio = 1.0
+                odd_even_sigma = star_row.get('odd_even_mismatch_sigma', 0.0)
+                if pd.isna(odd_even_sigma):
+                    odd_even_sigma = 0.0
+                    
                 shape_grid = [
                     ("U-vs-V Symmetry Score (Mean-to-Max)", f"{star_row['mean_to_max_depth_ratio']:.3f}"),
+                    ("Odd vs. Even Depth Ratio", f"{odd_even_ratio:.3f}"),
+                    ("Odd/Even Mismatch Significance", f"{odd_even_sigma:.2f} σ"),
                     ("In-Transit Skewness", f"{star_row['in_transit_skew']:.4f}"),
                     ("In-Transit Kurtosis", f"{star_row['in_transit_kurtosis']:.4f}"),
                     ("Out-of-Transit Scatter (Detrended)", f"{star_row['std_detrended']:.6f}"),
@@ -589,6 +616,100 @@ def main():
                     <div style="padding: 0.8rem; border-bottom: 1px solid #1f2937; display: flex; justify-content: space-between;">
                         <span style="color: #9ca3af;">{name}</span>
                         <span style="font-weight: bold; color: #10b981;">{value}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            with tab_cnn:
+                st.markdown("### 🧠 NASA Astronet 1D-CNN Multi-Scale Representations")
+                st.markdown("Multi-scale convolutional views fed into the dual-branch neural network:")
+                
+                period = star_row['bls_period']
+                epoch = star_row.get('recovered_epoch', 0.0)
+                if pd.isna(epoch):
+                    epoch = 0.0
+                    
+                if np.isnan(period) or period <= 0:
+                    st.warning("BLS period is invalid; cannot generate 1D-CNN views.")
+                else:
+                    g_view, l_view = generate_binned_views(df_det['time'].values, df_det['detrended_flux'].values, period, epoch)
+                    
+                    cnn_pcol1, cnn_pcol2 = st.columns(2)
+                    with cnn_pcol1:
+                        st.markdown("#### Global 1D-CNN View (201 Bins, Phase [-0.5, 0.5])")
+                        fig_g, ax_g = plt.subplots(figsize=(7, 3.8))
+                        phase_g = np.linspace(-0.5, 0.5, len(g_view))
+                        ax_g.plot(phase_g, g_view, color='#60a5fa', lw=1.8, marker='o', markersize=2, label='Global Conv1D Input')
+                        ax_g.axhline(0.0, color='#9ca3af', linestyle='--', alpha=0.5)
+                        ax_g.set_xlabel("Orbital Phase")
+                        ax_g.set_ylabel("Normalized Flux Delta (f - 1.0)")
+                        ax_g.grid(True, alpha=0.2)
+                        fig_g.patch.set_facecolor('#111827')
+                        ax_g.set_facecolor('#1f2937')
+                        ax_g.xaxis.label.set_color('#f3f4f6')
+                        ax_g.yaxis.label.set_color('#f3f4f6')
+                        ax_g.tick_params(colors='#f3f4f6')
+                        for s in ax_g.spines.values():
+                            s.set_color('#374151')
+                        st.pyplot(fig_g)
+                        plt.close(fig_g)
+                        
+                    with cnn_pcol2:
+                        st.markdown("#### Local Zoomed 1D-CNN View (61 Bins, Phase [-0.08, 0.08])")
+                        fig_l, ax_l = plt.subplots(figsize=(7, 3.8))
+                        phase_l = np.linspace(-0.08, 0.08, len(l_view))
+                        ax_l.plot(phase_l, l_view, color='#f43f5e', lw=2.2, marker='s', markersize=3, label='Local Conv1D Input')
+                        ax_l.axhline(0.0, color='#9ca3af', linestyle='--', alpha=0.5)
+                        ax_l.set_xlabel("Transit Phase")
+                        ax_l.set_ylabel("Normalized Flux Delta (f - 1.0)")
+                        ax_l.grid(True, alpha=0.2)
+                        fig_l.patch.set_facecolor('#111827')
+                        ax_l.set_facecolor('#1f2937')
+                        ax_l.xaxis.label.set_color('#f3f4f6')
+                        ax_l.yaxis.label.set_color('#f3f4f6')
+                        ax_l.tick_params(colors='#f3f4f6')
+                        for s in ax_l.spines.values():
+                            s.set_color('#374151')
+                        st.pyplot(fig_l)
+                        plt.close(fig_l)
+                    
+                    # Model Comparison Card
+                    prob_cp_cnn = star_row.get('prob_cnn_confirmed_planet', 0.0)
+                    prob_eb_cnn = star_row.get('prob_cnn_eclipsing_binary', 0.0)
+                    prob_fp_cnn = star_row.get('prob_cnn_false_positive', 0.0)
+                    
+                    prob_cp_ml = star_row.get('prob_confirmed_planet', 0.0)
+                    prob_eb_ml = star_row.get('prob_eclipsing_binary', 0.0)
+                    prob_fp_ml = star_row.get('prob_false_positive', 0.0)
+                    
+                    st.markdown("#### Model Probability Comparison")
+                    st.markdown(f"""
+                    <div class="card" style="padding: 1rem 1.5rem;">
+                        <table class="summary-table">
+                            <thead>
+                                <tr>
+                                    <th>Class</th>
+                                    <th>1D-CNN Probability</th>
+                                    <th>Stacking ML Probability</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="color: #10b981; font-weight: bold;">Confirmed Planet</td>
+                                    <td><b>{prob_cp_cnn*100:.1f}%</b></td>
+                                    <td>{prob_cp_ml*100:.1f}%</td>
+                                </tr>
+                                <tr>
+                                    <td style="color: #ec4899; font-weight: bold;">Eclipsing Binary</td>
+                                    <td><b>{prob_eb_cnn*100:.1f}%</b></td>
+                                    <td>{prob_eb_ml*100:.1f}%</td>
+                                </tr>
+                                <tr>
+                                    <td style="color: #ef4444; font-weight: bold;">False Positive</td>
+                                    <td><b>{prob_fp_cnn*100:.1f}%</b></td>
+                                    <td>{prob_fp_ml*100:.1f}%</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                     """, unsafe_allow_html=True)
             

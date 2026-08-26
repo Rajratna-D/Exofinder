@@ -155,6 +155,7 @@ def main():
     run_script("run_period_search.py")
     run_script("run_features.py")
     run_script("run_classifier.py")
+    run_script("run_deep_learning.py")
     
     print("\n==========================================")
     print("END-TO-END PIPELINE RUN COMPLETED SUCCESSFULLY!")

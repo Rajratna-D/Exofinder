@@ -23,10 +23,11 @@ data/detrended/
 *.fits.zip
 
 # --- Model Binaries & Large Outputs ---
-outputs/*.pkl
 outputs/*.joblib
 outputs/*.h5
 outputs/plots/
+!outputs/cnn_model.pt
+!outputs/model.pkl
 
 # --- Data Tables Tracking Rules ---
 # Ignore all CSV files by default to prevent accidental data leaks
@@ -36,6 +37,7 @@ outputs/plots/
 !outputs/predictions.csv
 !outputs/period_search_results.csv
 !outputs/feature_failures.csv
+!outputs/features.csv
 
 # --- IDE & Editors ---
 .vscode/
@@ -59,8 +61,6 @@ ehthumbs.db
 .streamlit/secrets.toml
 
 # --- Reports & Documentation ---
-# Track curated reports but ignore auto-generated ones
-!reports/COMPLETE_PROJECT_GUIDE.md
-!reports/feature_model_explanation.md
-!reports/visualizations.md
-!reports/test_report.md
+!reports/
+!reports/*.md
+!reports/images/*

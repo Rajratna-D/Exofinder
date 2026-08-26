@@ -140,45 +140,50 @@ def download_light_curves(labels_df, output_dir, failures_path):
     
     def download_single_star(star_id):
         filepath = os.path.join(output_dir, f"TIC_{star_id}.csv")
+        last_err = ""
+        for attempt in range(3):
+            try:
+                # Search for TESS light curves. SPOC is preferred.
+                search_result = lk.search_lightcurve(f"TIC {star_id}", mission="TESS", author="SPOC")
+                if len(search_result) == 0:
+                    search_result = lk.search_lightcurve(f"TIC {star_id}", mission="TESS")
+                if len(search_result) == 0:
+                    raise ValueError("No TESS light curve data available on MAST for this target.")
+                    
+                # Download first sector
+                lc = search_result[0].download()
+                if lc is None:
+                    raise ValueError("Lightkurve download returned None.")
+                    
+                time_val = np.asarray(lc.time.value).astype(np.float64)
+                flux_raw = lc.flux.value if hasattr(lc.flux, 'value') else lc.flux
+                flux_val = np.asarray(flux_raw).astype(np.float64)
+                
+                flux_err_raw = lc.flux_err.value if hasattr(lc.flux_err, 'value') else lc.flux_err
+                flux_err_val = np.asarray(flux_err_raw).astype(np.float64)
+                
+                lc_df = pd.DataFrame({
+                    'time': time_val,
+                    'flux': flux_val,
+                    'flux_err': flux_err_val
+                }).dropna(subset=['time', 'flux'])
+                
+                lc_df.to_csv(filepath, index=False)
+                try:
+                    print(f"  [SUCCESS] TIC {star_id} saved ({len(lc_df)} points)")
+                except Exception:
+                    pass
+                return {'star_id': star_id, 'success': True}
+            except Exception as e:
+                last_err = str(e)
+                import time, random
+                time.sleep(random.uniform(0.5, 1.5))
+                
         try:
-            # Search for TESS light curves. SPOC is preferred.
-            search_result = lk.search_lightcurve(f"TIC {star_id}", mission="TESS", author="SPOC")
-            if len(search_result) == 0:
-                search_result = lk.search_lightcurve(f"TIC {star_id}", mission="TESS")
-            if len(search_result) == 0:
-                raise ValueError("No TESS light curve data available on MAST for this target.")
-                
-            # Download first sector
-            lc = search_result[0].download()
-            if lc is None:
-                raise ValueError("Lightkurve download returned None.")
-                
-            time_val = np.asarray(lc.time.value).astype(np.float64)
-            flux_raw = lc.flux.value if hasattr(lc.flux, 'value') else lc.flux
-            flux_val = np.asarray(flux_raw).astype(np.float64)
-            
-            flux_err_raw = lc.flux_err.value if hasattr(lc.flux_err, 'value') else lc.flux_err
-            flux_err_val = np.asarray(flux_err_raw).astype(np.float64)
-            
-            lc_df = pd.DataFrame({
-                'time': time_val,
-                'flux': flux_val,
-                'flux_err': flux_err_val
-            }).dropna(subset=['time', 'flux'])
-            
-            lc_df.to_csv(filepath, index=False)
-            try:
-                print(f"  [SUCCESS] TIC {star_id} saved ({len(lc_df)} points)")
-            except Exception:
-                pass
-            return {'star_id': star_id, 'success': True}
-        except Exception as e:
-            error_msg = str(e)
-            try:
-                print(f"  [FAILED] TIC {star_id}: {error_msg}")
-            except Exception:
-                pass
-            return {'star_id': star_id, 'success': False, 'error': error_msg}
+            print(f"  [FAILED] TIC {star_id}: {last_err}")
+        except Exception:
+            pass
+        return {'star_id': star_id, 'success': False, 'error': last_err}
 
     failures_lock = threading.Lock()
 
