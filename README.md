@@ -1,4 +1,5 @@
 <p align="center">
+  <a href="https://github.com/Rajratna-D/Exofinder/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/Release-v1.0.0-007EC6?style=for-the-badge&logo=github&logoColor=white" alt="v1.0.0 Release"></a>
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React">
   <img src="https://img.shields.io/badge/Vite-6-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite">
@@ -174,7 +175,7 @@ Tabular     (22 feats) ──► [ Dense + BatchNorm ]   ──►  32-dim ─�
 ## 📊 Data Access & Photometry Guide
 
 To comply with GitHub's 100 MB file limit while avoiding multi-gigabyte repository bloat, ExoFinder uses **Apache Parquet (Zstandard compression + `float32`)**:
-* **13.5× Compression:** Compresses 2.93 GB of detrended cadence data down to **~216 MB** split into 4 partitioned chunks in `data/detrended_parquet/`.
+* **13.5× Compression:** Compresses 2.93 GB of detrended cadence data down to **~560 MB** split into 10 clean partitioned chunks in `data/detrended_parquet/` (~54 MB each).
 * **Zero-Setup Dashboard:** Precomputed views for 1,393 stars reside in `data/precomputed/` (~199 KB each), allowing the frontend to boot instantly.
 
 ### Loading Data in Python
@@ -184,14 +185,22 @@ from src.data_loader import load_detrended_star
 # Load any target light curve by TIC ID in ~1 millisecond:
 df = load_detrended_star(297153209)
 print(df.head())
-# Output columns: ['time', 'detrended_flux', 'flux_err', 'star_id']
+# Output columns: ['time', 'detrended_flux', 'flux', 'flux_err', 'trend', 'star_id']
 ```
 
-### Unpacking to Individual CSVs (Optional)
-If you require individual `TIC_*.csv` files for legacy tools:
+### Unpacking to Individual CSVs (Offline)
+You can extract both detrended and raw light curves locally from the Parquet archive in ~30 seconds:
 ```bash
 python -m src.data_loader --unpack-csv
 ```
+This automatically populates:
+* `data/detrended/TIC_*.csv` (1,454 detrended light curve files)
+* `data/raw/TIC_*.csv` (1,454 raw flux light curve files)
+
+### 📦 Standalone CSV Downloads (GitHub Release v1.0.0)
+For researchers who prefer standalone CSV archives without using Python, download the complete dataset from the [ExoFinder v1.0.0 Release](https://github.com/Rajratna-D/Exofinder/releases/tag/v1.0.0):
+* **`exofinder_detrended_csvs.zip`** (1.15 GB): All 1,454 detrended light curves in standard CSV format.
+* **`exofinder_raw_csvs.zip`** (620 MB): All 1,454 raw flux light curves in standard CSV format.
 
 ---
 
