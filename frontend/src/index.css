@@ -1,0 +1,314 @@
+@import "tailwindcss";
+
+/* ============================================================
+   EXOFINDER NOVA — Sci-Fi Design System
+   Design anchor: Dribbble "Nova Space Exploration Dashboard"
+   ============================================================ */
+
+/* --- Custom Theme Tokens --- */
+@theme {
+  --color-void: #04060A;
+  --color-void-light: #080C16;
+  --color-obsidian: #0A101E;
+  --color-obsidian-glass: rgba(10, 16, 30, 0.75);
+  --color-card: #0D1321;
+  --color-card-hover: rgba(14, 22, 40, 0.85);
+
+  --color-neon-cyan: #00F2FE;
+  --color-neon-cyan-muted: rgba(0, 242, 254, 0.6);
+  --color-solar-amber: #FF8A00;
+  --color-solar-amber-muted: rgba(255, 138, 0, 0.6);
+  --color-warp-violet: #8B5CF6;
+  --color-warp-violet-muted: rgba(139, 92, 246, 0.6);
+  --color-star-gold: #FCD34D;
+  --color-planet-green: #10B981;
+  --color-eb-red: #EF4444;
+  --color-fp-slate: #64748B;
+
+  --color-text-bright: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #475569;
+
+  --color-border-hud: rgba(0, 242, 254, 0.12);
+  --color-border-hud-glow: rgba(0, 242, 254, 0.45);
+  --color-border-subtle: rgba(148, 163, 184, 0.08);
+
+  --font-display: 'Outfit', 'Space Grotesk', system-ui, sans-serif;
+  --font-headline: 'Syne', 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-chamber: 'Times New Roman', Times, 'Nimbus Roman No9 L', serif;
+}
+
+.font-chamber {
+  font-family: 'Times New Roman', Times, 'Nimbus Roman No9 L', serif !important;
+}
+
+
+/* --- Base Resets & Root Styling --- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: var(--color-void);
+  color: var(--color-text-bright);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-void);
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* --- Scrollbar Styling --- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-void);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 242, 254, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 242, 254, 0.4);
+}
+
+/* --- Ambient Nebula Background Glow --- */
+.bg-nebula {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139, 92, 246, 0.12), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 50%, rgba(0, 242, 254, 0.05), transparent 50%),
+    var(--color-void);
+}
+
+/* --- Glassmorphism Card Layers --- */
+.glass-card {
+  background: var(--color-obsidian-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border-hud);
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  border-color: var(--color-border-hud-glow);
+  box-shadow:
+    0 0 20px rgba(0, 242, 254, 0.08),
+    0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.glass-card-static {
+  background: var(--color-obsidian-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border-hud);
+  border-radius: 12px;
+}
+
+/* --- Neon Glow Effects --- */
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(0, 242, 254, 0.15), 0 0 60px rgba(0, 242, 254, 0.05);
+}
+
+.glow-amber {
+  box-shadow: 0 0 20px rgba(255, 138, 0, 0.15), 0 0 60px rgba(255, 138, 0, 0.05);
+}
+
+.glow-violet {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15), 0 0 60px rgba(139, 92, 246, 0.05);
+}
+
+.text-glow-cyan {
+  text-shadow: 0 0 8px rgba(0, 242, 254, 0.4), 0 0 24px rgba(0, 242, 254, 0.1);
+}
+
+/* --- Telemetry / Monospace Data Styling --- */
+.font-telemetry {
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Status Indicator Badges --- */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status-nominal {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-planet {
+  background: rgba(0, 242, 254, 0.1);
+  color: var(--color-neon-cyan);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+}
+
+.status-eb {
+  background: rgba(255, 138, 0, 0.1);
+  color: var(--color-solar-amber);
+  border: 1px solid rgba(255, 138, 0, 0.25);
+}
+
+.status-fp {
+  background: rgba(100, 116, 139, 0.1);
+  color: var(--color-fp-slate);
+  border: 1px solid rgba(100, 116, 139, 0.25);
+}
+
+/* --- Radar Pulse Animation (Header live indicator) --- */
+@keyframes radar-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.5); }
+}
+
+.radar-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10B981;
+  animation: radar-pulse 2s ease-in-out infinite;
+}
+
+/* --- Subtle CRT Scanline Overlay (toggleable) --- */
+.scanline-overlay::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+}
+
+/* --- Navigation Rail Icon Button --- */
+.nav-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.nav-icon-btn:hover {
+  color: var(--color-neon-cyan);
+  background: rgba(0, 242, 254, 0.06);
+  border-color: rgba(0, 242, 254, 0.12);
+}
+
+.nav-icon-btn.active {
+  color: var(--color-neon-cyan);
+  background: rgba(0, 242, 254, 0.1);
+  border-color: rgba(0, 242, 254, 0.3);
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.1);
+}
+
+/* --- Confidence Ring Progress --- */
+@keyframes ring-fill {
+  from { stroke-dashoffset: 283; }
+}
+
+.confidence-ring {
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+
+/* --- Diagnostic Check Card --- */
+.check-pass {
+  border-left: 3px solid #10B981;
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.check-fail {
+  border-left: 3px solid #EF4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.check-warn {
+  border-left: 3px solid #F59E0B;
+  background: rgba(245, 158, 11, 0.05);
+}
+
+/* ============================================================
+   Persistent GPU Tab Stage Transition System
+   - Zero-unmount render-once architecture
+   - Overlapping grid cells prevent layout collapse or jump
+   - GPU compositor transforms (opacity & translateY)
+   - Visibility transition keeps outgoing tab rendered during fade
+   ============================================================ */
+.tab-stage-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  align-items: start;
+  width: 100%;
+}
+
+.tab-stage-panel {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  width: 100%;
+  will-change: opacity, transform;
+}
+
+.tab-stage-active {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  visibility: visible;
+  z-index: 10;
+  transition: opacity 300ms cubic-bezier(0.16, 1, 0.3, 1), 
+              transform 300ms cubic-bezier(0.16, 1, 0.3, 1), 
+              visibility 0ms;
+}
+
+.tab-stage-inactive {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  visibility: hidden;
+  z-index: 0;
+  transition: opacity 260ms cubic-bezier(0.16, 1, 0.3, 1), 
+              transform 260ms cubic-bezier(0.16, 1, 0.3, 1), 
+              visibility 260ms step-end;
+}
