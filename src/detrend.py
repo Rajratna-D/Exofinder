@@ -111,7 +111,11 @@ def process_all_stars(labels_path="data/labels.csv", raw_dir="data/raw", output_
         raw_file = os.path.join(raw_dir, f"TIC_{star_id}.csv")
         
         if not os.path.exists(raw_file):
-            print(f"Warning: Raw file not found for TIC {star_id}")
+            continue
+            
+        out_file = os.path.join(output_dir, f"TIC_{star_id}.csv")
+        if os.path.exists(out_file) and os.path.getsize(out_file) > 100:
+            processed_count += 1
             continue
             
         # Load raw data
@@ -121,7 +125,6 @@ def process_all_stars(labels_path="data/labels.csv", raw_dir="data/raw", output_
         detrended_df = detrend_light_curve(df)
         
         # Save detrended data
-        out_file = os.path.join(output_dir, f"TIC_{star_id}.csv")
         detrended_df.to_csv(out_file, index=False)
         processed_count += 1
         

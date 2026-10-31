@@ -120,8 +120,16 @@ def run_period_search_all(labels_path="data/labels.csv", detrended_dir="data/det
         raise FileNotFoundError(f"Labels file not found: {labels_path}")
         
     labels_df = pd.read_csv(labels_path)
-    os.makedirs(os.path.dirname(output_csv), exist_ok=True)
-    
+    existing_map = {}
+    if os.path.exists(output_csv):
+        try:
+            prev_df = pd.read_csv(output_csv)
+            for _, r in prev_df.iterrows():
+                existing_map[int(r['star_id'])] = r.to_dict()
+            print(f"Loaded {len(existing_map)} previously computed BLS results to reuse.")
+        except Exception:
+            existing_map = {}
+
     results = []
     success_count = 0
     
@@ -132,9 +140,13 @@ def run_period_search_all(labels_path="data/labels.csv", detrended_dir="data/det
         label = row['label']
         cat_period = float(row['catalog_period'])
         
+        if star_id in existing_map:
+            results.append(existing_map[star_id])
+            success_count += 1
+            continue
+            
         file_path = os.path.join(detrended_dir, f"TIC_{star_id}.csv")
         if not os.path.exists(file_path):
-            print(f"Warning: Detrended file not found for TIC {star_id}")
             continue
             
         df = pd.read_csv(file_path)

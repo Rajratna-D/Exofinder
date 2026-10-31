@@ -80,104 +80,60 @@ def extract_features_for_star(star_id, label, cat_period, bls_row, detrended_df,
             'bls_duration': 0.0,
             'bls_power': 0.0,
             'transit_snr': 0.0,
+            'secondary_depth_phase_05': 0.0,
+            'secondary_to_primary_ratio': 0.0,
+            'secondary_significance_sigma': 0.0,
+            'odd_even_depth_ratio': 1.0,
+            'odd_even_mismatch_sigma': 0.0,
+            'odd_even_diff_2p': 0.0,
+            'kepler_duration_ratio': 0.0,
+            'positive_to_negative_ratio': 1.0,
+            'bottom_flatness_ratio': 1.0,
             'mean_to_max_depth_ratio': 0.0,
             'in_transit_skew': 0.0,
             'in_transit_kurtosis': 0.0,
+            'flux_kurtosis': float(kurtosis(flux)) if len(flux) > 3 and np.var(flux) > 1e-12 else 0.0,
+            'ingress_egress_symmetry': 0.0,
+            'transit_duty_cycle': 0.0,
+            'depth_to_noise': 0.0,
+            'transit_coverage_fraction': 0.0,
             'std_raw': np.std(raw_flux) if len(raw_flux) > 0 else 0.0,
             'std_detrended': np.std(flux) if len(flux) > 0 else 0.0,
-            'transit_count': 0.0,
-            'flux_kurtosis': kurtosis(flux) if len(flux) > 0 else 0.0,
-            'ingress_egress_symmetry': 0.0,
-            'secondary_eclipse_check': 0.0,
-            'period_ratio': 0.0,
-            'depth_to_noise': 0.0,
-            'odd_even_depth_ratio': 1.0,
-            'odd_even_mismatch_sigma': 0.0
+            'transit_count': 0.0
         }
         
-    # Calculate phase folding to isolate in-transit vs out-of-transit points
+    # Phase fold into [-0.5, 0.5] range
     phase = ((time - epoch) % period) / period
     phase = np.where(phase > 0.5, phase - 1.0, phase)
     
-    # Define transit window mask (within half of the transit duration on either side of phase 0)
-    # duration is in days, period is in days.
-    half_dur_phase = (duration / 2.0) / period
+    half_dur_phase = max(0.003, min(0.15, (duration / 2.0) / period))
     in_transit_mask = np.abs(phase) <= half_dur_phase
+    out_transit_mask = (np.abs(phase) >= 1.5 * half_dur_phase) & (np.abs(phase) <= 0.45)
+    sec_transit_mask = np.abs(np.abs(phase) - 0.5) <= half_dur_phase
     
-    # Out of transit mask (buffer of 1.5x duration to prevent ingress/egress overlaps)
-    out_transit_mask = np.abs(phase) >= (1.5 * half_dur_phase)
-    
-    # 1. Calculate Out-Of-Transit (OOT) scatter to evaluate significance (SNR)
+    # 1. Out-Of-Transit (OOT) scatter
     flux_oot = flux[out_transit_mask]
     if len(flux_oot) > 10:
-        std_oot = np.std(flux_oot)
+        std_oot = float(np.std(flux_oot))
     else:
-        std_oot = np.std(flux) if len(flux) > 0 else 1e-5
-        
-    std_oot = max(std_oot, 1e-6)  # Prevent division by zero
-    transit_snr = depth / std_oot
+        std_oot = float(np.std(flux)) if len(flux) > 0 else 1e-5
+    std_oot = max(std_oot, 1e-6)
     
-    # 2. Extract Shape Metrics (U-vs-V shape to separate EBs from planets)
-    # Calculate binned profile between -0.15 and 0.15
-    bin_centers, binned_flux = get_binned_profile(phase, flux, num_bins=80)
+    # 2. True Integrated Transit SNR
+    n_in_transit = int(np.sum(in_transit_mask))
+    prim_drop = max(0.0, 1.0 - float(np.median(flux[in_transit_mask]))) if n_in_transit > 2 else depth
+    transit_snr = float((prim_drop / std_oot) * np.sqrt(max(1, n_in_transit)))
     
-    # Identify in-transit points in the binned profile
-    binned_in_transit_mask = np.abs(bin_centers) <= half_dur_phase
-    binned_flux_in = binned_flux[binned_in_transit_mask]
+    # 3. Secondary Eclipse Analysis at Phase 0.5 (Gold Standard for EB Identification)
+    n_in_sec = int(np.sum(sec_transit_mask))
+    sec_drop = max(0.0, 1.0 - float(np.median(flux[sec_transit_mask]))) if n_in_sec > 2 else 0.0
+    sec_to_prim = float(sec_drop / max(prim_drop, 1e-5))
+    sec_sig_sigma = float((sec_drop / std_oot) * np.sqrt(max(1, n_in_sec)))
     
-    if len(binned_flux_in) > 3:
-        # Depth at each point: distance from normalized baseline 1.0
-        depths = 1.0 - binned_flux_in
-        max_depth = np.max(depths)
-        mean_depth = np.mean(depths)
-        
-        # Mean-to-Max depth ratio:
-        # V-shaped dips (EBs) have a peak shape, giving mean/max ratio ~0.5.
-        # U-shaped dips (planets) have a boxy flat bottom, giving mean/max ratio > 0.75.
-        mean_to_max_ratio = mean_depth / max_depth if max_depth > 0 else 0.0
-        
-        in_transit_skew = skew(binned_flux_in)
-        in_transit_kurt = kurtosis(binned_flux_in)
-        
-        # Clean any NaNs
-        if np.isnan(mean_to_max_ratio):
-            mean_to_max_ratio = 0.0
-        if np.isnan(in_transit_skew):
-            in_transit_skew = 0.0
-        if np.isnan(in_transit_kurt):
-            in_transit_kurt = 0.0
-    else:
-        mean_to_max_ratio = 0.0
-        in_transit_skew = 0.0
-        in_transit_kurt = 0.0
-        
-    # 3. Time Series and Overall Stats
-    std_raw = np.std(raw_flux) if len(raw_flux) > 0 else 0.0
-    std_detrend = np.std(flux) if len(flux) > 0 else 0.0
-    total_time = np.max(time) - np.min(time) if len(time) > 0 else 0.0
-    transit_count = total_time / period
-    
-    flux_kurt = kurtosis(flux) if len(flux) > 0 else 0.0
-    if np.isnan(flux_kurt):
-        flux_kurt = 0.0
-
-    # Calculate ingress_egress_symmetry
-    left_half_flux = flux[(phase < 0) & in_transit_mask]
-    right_half_flux = flux[(phase > 0) & in_transit_mask]
-    if len(left_half_flux) < 3 or len(right_half_flux) < 3:
-        ingress_egress_symmetry = 0.0
-    else:
-        skew_left = skew(left_half_flux)
-        skew_right = skew(right_half_flux)
-        if np.isnan(skew_left) or np.isnan(skew_right):
-            ingress_egress_symmetry = 0.0
-        else:
-            ingress_egress_symmetry = abs(skew_left) - abs(skew_right)
-
-    # 4. Odd vs Even Transit Depth Analysis (Critical EB Discriminator)
-    transit_cycle = np.round((time - epoch) / period).astype(int)
-    even_transit_mask = in_transit_mask & (transit_cycle % 2 == 0)
-    odd_transit_mask = in_transit_mask & (transit_cycle % 2 != 0)
+    # 4. Odd vs Even Transit Depth Analysis at 1P
+    cycle = np.round((time - epoch) / period).astype(int)
+    even_transit_mask = in_transit_mask & (cycle % 2 == 0)
+    odd_transit_mask = in_transit_mask & (cycle % 2 != 0)
     
     even_flux = flux[even_transit_mask]
     odd_flux = flux[odd_transit_mask]
@@ -186,46 +142,102 @@ def extract_features_for_star(star_id, label, cat_period, bls_row, detrended_df,
         depth_even = max(0.0, 1.0 - float(np.median(even_flux)))
         std_even = float(np.std(even_flux)) if len(even_flux) > 1 else std_oot
     else:
-        depth_even = depth
+        depth_even = prim_drop
         std_even = std_oot
         
     if len(odd_flux) >= 3:
         depth_odd = max(0.0, 1.0 - float(np.median(odd_flux)))
         std_odd = float(np.std(odd_flux)) if len(odd_flux) > 1 else std_oot
     else:
-        depth_odd = depth
+        depth_odd = prim_drop
         std_odd = std_oot
         
     max_d = max(depth_odd, depth_even)
     min_d = min(depth_odd, depth_even)
-    odd_even_depth_ratio = (min_d / max_d) if max_d > 1e-6 else 1.0
-    if np.isnan(odd_even_depth_ratio):
-        odd_even_depth_ratio = 1.0
-        
-    err_denom = np.sqrt((std_odd**2 / max(1, len(odd_flux))) + (std_even**2 / max(1, len(even_flux))))
-    odd_even_mismatch_sigma = float(np.abs(depth_odd - depth_even) / err_denom) if err_denom > 1e-6 else 0.0
-    if np.isnan(odd_even_mismatch_sigma):
-        odd_even_mismatch_sigma = 0.0
-
-    # 5. Secondary Eclipse Check
-    secondary_eclipse_check = 0.0
-    try:
-        # Only check for secondary eclipse if period/2 is physically meaningful (>= 0.5 days)
-        if period / 2.0 >= 0.5:
-            clean_mask = np.isfinite(time) & np.isfinite(flux)
-            t_clean = time[clean_mask]
-            f_clean = flux[clean_mask]
-            if len(t_clean) >= 100:
-                dy_clean = detrended_df['flux_err'].values[clean_mask] if 'flux_err' in detrended_df.columns else None
-                bls_sec = BoxLeastSquares(t_clean, f_clean, dy=dy_clean)
-                duration_grid = np.linspace(0.01, min(0.25, max(0.02, period / 4.0)), 10)
-                results_sec = bls_sec.power([period / 2.0], duration_grid)
-                peak_power = float(np.nanmax(results_sec.power))
-                if not np.isnan(peak_power):
-                    secondary_eclipse_check = peak_power
-    except Exception:
-        secondary_eclipse_check = 0.0
+    odd_even_depth_ratio = float((min_d / max_d) if max_d > 1e-6 else 1.0)
     
+    err_denom = np.sqrt((std_odd**2 / max(1, len(odd_flux))) + (std_even**2 / max(1, len(even_flux))))
+    odd_even_mismatch_sigma = float(np.abs(depth_odd - depth_even) / max(err_denom, 1e-6))
+    
+    # 5. Odd vs Even Analysis at 2P (Exposes Half-Period Alias EBs)
+    p2 = 2.0 * period
+    phase2 = ((time - epoch) % p2) / p2
+    phase2 = np.where(phase2 > 0.5, phase2 - 1.0, phase2)
+    half_dur2 = max(0.003, min(0.1, (duration / 2.0) / p2))
+    
+    mask_ev1 = np.abs(phase2) <= half_dur2
+    mask_ev2 = np.abs(np.abs(phase2) - 0.5) <= half_dur2
+    d1 = max(0.0, 1.0 - float(np.median(flux[mask_ev1]))) if np.sum(mask_ev1) > 2 else prim_drop
+    d2 = max(0.0, 1.0 - float(np.median(flux[mask_ev2]))) if np.sum(mask_ev2) > 2 else 0.0
+    odd_even_diff_2p = float(abs(d1 - d2) / max(1e-5, max(d1, d2)))
+    
+    # 6. Keplerian Duration Scaling & Duty Cycle
+    kepler_duration_ratio = float(duration / (period ** (1.0 / 3.0))) if period > 0 else 0.0
+    transit_duty_cycle = float(duration / period) if period > 0 else 0.0
+    
+    # 7. Positive vs Negative Asymmetry (Stellar Flares / Systematics vs Transits)
+    max_pos = max(0.0, float(np.max(flux) - 1.0)) if len(flux) > 0 else 0.0
+    max_neg = max(0.0, float(1.0 - np.min(flux))) if len(flux) > 0 else 1e-6
+    positive_to_negative_ratio = float(max_pos / max(max_neg, 1e-6))
+    
+    # 8. Bottom Flatness Ratio (U-Shape vs V-Shape)
+    deep_mask = in_transit_mask & ((1.0 - flux) >= 0.5 * prim_drop)
+    bottom_std = float(np.std(flux[deep_mask])) if np.sum(deep_mask) > 3 else std_oot
+    bottom_flatness_ratio = float(bottom_std / std_oot)
+    
+    # 9. Extract Binned Profile Shape Metrics
+    bin_centers, binned_flux = get_binned_profile(phase, flux, num_bins=80)
+    binned_in_transit_mask = np.abs(bin_centers) <= half_dur_phase
+    binned_flux_in = binned_flux[binned_in_transit_mask]
+    
+    if len(binned_flux_in) > 3 and np.var(binned_flux_in) > 1e-12:
+        depths = 1.0 - binned_flux_in
+        max_depth = np.max(depths)
+        mean_depth = np.mean(depths)
+        mean_to_max_ratio = float(mean_depth / max_depth if max_depth > 0 else 0.0)
+        in_transit_skew = float(skew(binned_flux_in))
+        in_transit_kurt = float(kurtosis(binned_flux_in))
+        if np.isnan(mean_to_max_ratio): mean_to_max_ratio = 0.0
+        if np.isnan(in_transit_skew): in_transit_skew = 0.0
+        if np.isnan(in_transit_kurt): in_transit_kurt = 0.0
+    else:
+        mean_to_max_ratio = 0.0
+        in_transit_skew = 0.0
+        in_transit_kurt = 0.0
+        
+    # 10. Ingress/Egress Symmetry
+    left_half_flux = flux[(phase < 0) & in_transit_mask]
+    right_half_flux = flux[(phase > 0) & in_transit_mask]
+    if len(left_half_flux) < 3 or len(right_half_flux) < 3 or np.var(left_half_flux) < 1e-12 or np.var(right_half_flux) < 1e-12:
+        ingress_egress_symmetry = 0.0
+    else:
+        skew_left = skew(left_half_flux)
+        skew_right = skew(right_half_flux)
+        if np.isnan(skew_left) or np.isnan(skew_right):
+            ingress_egress_symmetry = 0.0
+        else:
+            ingress_egress_symmetry = float(abs(skew_left) - abs(skew_right))
+            
+    # 11. Transit Counts & Coverage Fraction
+    total_time = float(np.max(time) - np.min(time)) if len(time) > 0 else 0.0
+    expected_transits = total_time / period if period > 0 else 1.0
+    
+    # Count how many individual transit epochs have >= 2 observed points
+    observed_epochs = 0
+    cycle_min = int(np.floor((np.min(time) - epoch) / period))
+    cycle_max = int(np.ceil((np.max(time) - epoch) / period))
+    for c in range(cycle_min, cycle_max + 1):
+        t_center = epoch + c * period
+        pts_in_epoch = np.sum(np.abs(time - t_center) <= (duration / 2.0))
+        if pts_in_epoch >= 2:
+            observed_epochs += 1
+    transit_coverage_fraction = float(observed_epochs / max(1.0, expected_transits))
+    
+    std_raw = float(np.std(raw_flux)) if len(raw_flux) > 0 else 0.0
+    std_detrend = float(np.std(flux)) if len(flux) > 0 else 0.0
+    flux_kurt = float(kurtosis(flux)) if len(flux) > 3 and np.var(flux) > 1e-12 else 0.0
+    if np.isnan(flux_kurt): flux_kurt = 0.0
+
     return {
         'star_id': star_id,
         'label': label,
@@ -235,19 +247,26 @@ def extract_features_for_star(star_id, label, cat_period, bls_row, detrended_df,
         'bls_duration': duration,
         'bls_power': bls_power,
         'transit_snr': transit_snr,
+        'secondary_depth_phase_05': sec_drop,
+        'secondary_to_primary_ratio': sec_to_prim,
+        'secondary_significance_sigma': sec_sig_sigma,
+        'odd_even_depth_ratio': odd_even_depth_ratio,
+        'odd_even_mismatch_sigma': odd_even_mismatch_sigma,
+        'odd_even_diff_2p': odd_even_diff_2p,
+        'kepler_duration_ratio': kepler_duration_ratio,
+        'positive_to_negative_ratio': positive_to_negative_ratio,
+        'bottom_flatness_ratio': bottom_flatness_ratio,
         'mean_to_max_depth_ratio': mean_to_max_ratio,
         'in_transit_skew': in_transit_skew,
         'in_transit_kurtosis': in_transit_kurt,
-        'std_raw': std_raw,
-        'std_detrended': std_detrend,
-        'transit_count': transit_count,
         'flux_kurtosis': flux_kurt,
         'ingress_egress_symmetry': ingress_egress_symmetry,
-        'secondary_eclipse_check': secondary_eclipse_check,
-        'period_ratio': period / cat_period if cat_period > 0 and not np.isnan(cat_period) else 0.0,
-        'depth_to_noise': depth / std_detrend if std_detrend > 0 else 0.0,
-        'odd_even_depth_ratio': odd_even_depth_ratio,
-        'odd_even_mismatch_sigma': odd_even_mismatch_sigma
+        'transit_duty_cycle': transit_duty_cycle,
+        'depth_to_noise': depth / max(std_detrend, 1e-6),
+        'transit_coverage_fraction': transit_coverage_fraction,
+        'std_raw': std_raw,
+        'std_detrended': std_detrend,
+        'transit_count': float(observed_epochs)
     }
 
 

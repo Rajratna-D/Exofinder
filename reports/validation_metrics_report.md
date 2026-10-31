@@ -1,85 +1,42 @@
 # Validation Metrics Report (ExoFinder Stacking & Calibration)
 
-This report was automatically generated following hyperparameter optimization, stacking ensembling, and probability calibration across the 405-target dataset.
+This report was generated using 5-fold Stratified Cross-Validation out-of-fold predictions across all **1393 verified NASA TESS stars** with strict zero data leakage.
 
 ---
 
 ## 1. Classifier Performance Comparison
 
-Below is the comparison of performance metrics of all tuned models across the **14 physical features**:
+Below is the comparison of out-of-fold metrics across all **22 physical features**:
 
-| Model Architecture | Train Accuracy (525 stars) | Test Accuracy (132 stars) | 5-Fold Stratified CV Accuracy |
-| :--- | :--- | :--- | :--- |
-| **Random Forest (Tuned)** | 82.9% | 50.8% | **46.7% ± 4.0%** |
-| **XGBoost (Tuned)** | 81.7% | 47.7% | **45.9% ± 4.5%** |
-| **Logistic Regression (Tuned)** | 44.0% | 34.8% | **41.9% ± 2.8%** |
-| **Stacking Classifier (Meta-LR)** | 81.5% | 50.8% | **47.6% ± 5.2%** |
-| **Calibrated Stacking (Platt Sigmoid)** | 80.6% | 50.0% | **46.9% ± 5.0%** |
+| Model Architecture | 5-Fold Stratified CV Accuracy | 5-Fold Stratified Macro F1 |
+| :--- | :--- | :--- |
+| **Random Forest (Regularized)** | **50.18% Â± 2.14%** | 47.7% |
+| **XGBoost (Regularized)** | **51.97% Â± 2.63%** | 48.3% |
+| **Calibrated Stacking (Production)** | **51.76% Â± 2.87%** | **48.51%** |
 
 ### Selected Deployed Model: **Calibrated Stacking**
 Saved to `outputs/model.pkl` with Platt-calibrated probability mappings.
 
 ---
 
-## 2. Test Set Classification Reports
+## 2. Out-Of-Fold Classification Report across All 1393 Stars
 
-### Calibrated Stacking Ensemble (Production Model)
 ```
                   precision    recall  f1-score   support
 
-confirmed_planet       0.52      0.37      0.43        38
-eclipsing_binary       0.49      0.73      0.59        49
-  false_positive       0.52      0.36      0.42        45
+confirmed_planet       0.54      0.67      0.60       469
+eclipsing_binary       0.49      0.63      0.55       506
+  false_positive       0.53      0.21      0.30       418
 
-        accuracy                           0.50       132
-       macro avg       0.51      0.49      0.48       132
-    weighted avg       0.51      0.50      0.48       132
-```
+        accuracy                           0.52      1393
+       macro avg       0.52      0.50      0.49      1393
+    weighted avg       0.52      0.52      0.49      1393
 
-### Stacking Ensemble (Pre-calibration)
-```
-                  precision    recall  f1-score   support
-
-confirmed_planet       0.54      0.37      0.44        38
-eclipsing_binary       0.50      0.69      0.58        49
-  false_positive       0.50      0.42      0.46        45
-
-        accuracy                           0.51       132
-       macro avg       0.51      0.49      0.49       132
-    weighted avg       0.51      0.51      0.50       132
-```
-
-### Tuned XGBoost
-```
-                  precision    recall  f1-score   support
-
-confirmed_planet       0.53      0.50      0.51        38
-eclipsing_binary       0.47      0.55      0.51        49
-  false_positive       0.44      0.38      0.40        45
-
-        accuracy                           0.48       132
-       macro avg       0.48      0.48      0.48       132
-    weighted avg       0.48      0.48      0.47       132
-```
-
-### Tuned Random Forest
-```
-                  precision    recall  f1-score   support
-
-confirmed_planet       0.50      0.39      0.44        38
-eclipsing_binary       0.52      0.61      0.56        49
-  false_positive       0.50      0.49      0.49        45
-
-        accuracy                           0.51       132
-       macro avg       0.51      0.50      0.50       132
-    weighted avg       0.51      0.51      0.50       132
 ```
 
 ---
 
-## 3. Key Enhancements & Methodology
-1. **Odd/Even Transit Depth Analysis**: Evaluates odd-cycle vs. even-cycle transit depth ratios and difference significance (sigma) to separate Eclipsing Binaries from transiting planets.
-2. **Automated Hyperparameter Optimization**: `RandomizedSearchCV` explores regularization, tree depth, and learning rates under stratified cross-validation.
-3. **Stacking Ensemble**: Replaced manual heuristic voting with `StackingClassifier`, allowing a Logistic Regression meta-learner to learn optimal non-linear blending weights.
-4. **Probability Calibration**: `CalibratedClassifierCV` transforms raw model decision margins into well-calibrated posterior probabilities.
-5. **Physical Feature Set (14 features)**: bls_depth, bls_duration, bls_power, transit_snr, mean_to_max_depth_ratio, in_transit_skew, in_transit_kurtosis, flux_kurtosis, ingress_egress_symmetry, secondary_eclipse_check, period_ratio, depth_to_noise, odd_even_depth_ratio, odd_even_mismatch_sigma.
+## 3. Data Integrity & Anti-Leakage Verification
+1. **Zero Data Leakage**: Standard scaling and label transformations are fitted strictly within each training fold and applied to held-out validation stars.
+2. **True Out-Of-Fold Persistence**: The `outputs/predictions.csv` matrix contains 100% out-of-fold predictions, ensuring the deployed catalog reflects genuine generalization.
+3. **Overfitting Mitigation**: Tree depths constrained to 4 with minimum leaf count of 5 and $L_2$ regularization $\lambda = 3.0$.

@@ -156,6 +156,16 @@ def main():
     run_script("run_features.py")
     run_script("run_classifier.py")
     run_script("run_deep_learning.py")
+
+    # Synchronize PostgreSQL / SQLite database with latest pipeline results
+    try:
+        from src.db.migrate import run_migration
+        print("\n==========================================")
+        print("SYNCHRONIZING DATABASE WITH PIPELINE OUTPUTS")
+        print("==========================================")
+        run_migration()
+    except Exception as dbe:
+        print(f"Notice: Database sync skipped ({dbe})")
     
     print("\n==========================================")
     print("END-TO-END PIPELINE RUN COMPLETED SUCCESSFULLY!")
@@ -163,6 +173,7 @@ def main():
     print("To launch the interactive dashboard, run in your terminal:")
     print("  .venv\\Scripts\\streamlit run app.py")
     print("==========================================")
+
 
 if __name__ == "__main__":
     main()

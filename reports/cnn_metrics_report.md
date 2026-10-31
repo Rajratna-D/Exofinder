@@ -1,41 +1,41 @@
 # NASA Astronet 1D-CNN Deep Learning Report
 
-This report summarizes the performance of the **Dual-Branch 1D-Convolutional Neural Network (1D-CNN)** with multi-modal tabular fusion trained on NASA TESS stellar light curves.
+This report summarizes the performance of the **Dual-Branch 1D-Convolutional Neural Network (1D-CNN)** with multi-modal tabular fusion evaluated using 5-fold Stratified Cross-Validation out-of-fold predictions across all **1393 stars** with strict zero data leakage.
 
 ---
 
 ## 1. 1D-CNN Model Architecture
 
-- **Global 1D-CNN Branch (201 bins)**: Multi-scale 1D convolutions ($k=5$, channels $1 	o 16 	o 32 	o 64$) extracting broad orbital context and secondary eclipse morphology.
-- **Local Zoomed 1D-CNN Branch (61 bins)**: Fine-scale 1D convolutions ($k=3$, channels $1 	o 16 	o 32 	o 64$) resolving ingress/egress slopes and bottom curvature (U vs. V shape).
-- **Tabular Feature Branch (14 features)**: Dense network ($14 	o 32$) with Batch Normalization and Dropout.
-- **Multi-Modal Fusion**: Concatenates $640 + 640 + 32 = 1312$ features into dense classification layers with Dropout.
+* **Global 1D-CNN Branch (201 bins)**: Multi-scale 1D convolutions ($k=5$, channels $1 \to 16 \to 32 \to 64$) extracting broad orbital context and secondary eclipse morphology.
+* **Local Zoomed 1D-CNN Branch (61 bins)**: Fine-scale 1D convolutions ($k=3$, channels $1 \to 16 \to 32 \to 64$) resolving ingress and egress slopes and transit curvature.
+* **Tabular Feature Branch (22 features)**: Dense network (22 $\to 32$) with Batch Normalization and Dropout.
+* **Multi-Modal Fusion**: Concatenates $640 + 640 + 32 = 1312$ latent features into dense classification layers with Dropout.
 
 ---
 
-## 2. Validation Metrics
+## 2. Validation Metrics (5-Fold Stratified Cross-Validation)
 
 | Metric | Score |
 | :--- | :--- |
-| **5-Fold Stratified Cross-Validation** | **50.10% ± 3.44%** |
-| **Holdout Test Set Accuracy** (81 stars) | **43.94%** |
+| **5-Fold Cross-Validation Accuracy** | **52.62% Â± 2.63%** |
+| **Overall Out-Of-Fold Accuracy** (1393 stars) | **52.62%** |
 
-### Test Set Classification Report
+### Out-Of-Fold Classification Report across All 1393 Stars
 ```
                   precision    recall  f1-score   support
 
-confirmed_planet       0.45      0.24      0.31        38
-eclipsing_binary       0.41      0.63      0.50        49
-  false_positive       0.49      0.40      0.44        45
+confirmed_planet       0.58      0.64      0.61       469
+eclipsing_binary       0.50      0.62      0.56       506
+  false_positive       0.47      0.29      0.36       418
 
-        accuracy                           0.44       132
-       macro avg       0.45      0.42      0.42       132
-    weighted avg       0.45      0.44      0.42       132
+        accuracy                           0.53      1393
+       macro avg       0.52      0.52      0.51      1393
+    weighted avg       0.52      0.53      0.51      1393
 
 ```
 
 ---
 
-## 3. Key Observations
-1. **End-to-End Shape Perception**: The 1D-CNN directly captures the continuous curvature of planetary transit bottoms (U-shape) vs. binary star V-shapes without relying solely on summary metrics.
-2. **Multi-Scale Context**: Combining the 201-bin global orbital baseline with the 61-bin zoomed transit window allows the network to simultaneously vet against out-of-transit stellar variability and evaluate in-transit ingress slopes.
+## 3. Data Integrity & Leakage Prevention
+1. **Zero Data Leakage**: Standard scaling and class balancing weights were fitted strictly on the training partition of each fold and applied to held-out validation stars.
+2. **True Out-Of-Fold Output**: Every prediction stored in `outputs/predictions.csv` was generated when the star was in the held-out validation partition.
