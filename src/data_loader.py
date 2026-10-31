@@ -379,34 +379,48 @@ def load_detrended_star(star_id, base_dir=None):
     raise FileNotFoundError(f"Light curve data for TIC {star_id} not found in CSV or Parquet archives.")
 
 
-def unpack_parquet_to_csv(parquet_dir=None, output_dir=None):
+def unpack_parquet_to_csv(parquet_dir=None, output_dir=None, unpack_raw=True, raw_output_dir=None):
     """
-    Extracts all individual CSV light curves from data/detrended_parquet/ into data/detrended/.
+    Extracts all individual CSV light curves from data/detrended_parquet/ into data/detrended/
+    and optionally data/raw/.
     """
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if parquet_dir is None:
         parquet_dir = os.path.join(base_dir, "data", "detrended_parquet")
     if output_dir is None:
         output_dir = os.path.join(base_dir, "data", "detrended")
+    if raw_output_dir is None:
+        raw_output_dir = os.path.join(base_dir, "data", "raw")
         
     if not os.path.exists(parquet_dir):
         raise FileNotFoundError(f"Parquet directory not found at: {parquet_dir}")
         
     os.makedirs(output_dir, exist_ok=True)
+    if unpack_raw:
+        os.makedirs(raw_output_dir, exist_ok=True)
+        
     import glob
     parts = sorted(glob.glob(os.path.join(parquet_dir, "*.parquet")))
-    print(f"Unpacking {len(parts)} Parquet chunks into {output_dir}...")
+    print(f"Unpacking {len(parts)} Parquet chunks into {output_dir} (and raw in {raw_output_dir})...")
     
     total_unpacked = 0
     for p in parts:
         df_part = pd.read_parquet(p)
         for sid, group in df_part.groupby('star_id'):
+            # Save detrended curve
             out_csv = os.path.join(output_dir, f"TIC_{sid}.csv")
-            cols_to_save = [c for c in ['time', 'flux', 'flux_err', 'trend', 'detrended_flux'] if c in group.columns]
-            group[cols_to_save].to_csv(out_csv, index=False)
+            cols_det = [c for c in ['time', 'flux', 'flux_err', 'trend', 'detrended_flux'] if c in group.columns]
+            group[cols_det].to_csv(out_csv, index=False)
+            
+            # Save raw curve
+            if unpack_raw:
+                raw_csv = os.path.join(raw_output_dir, f"TIC_{sid}.csv")
+                cols_raw = [c for c in ['time', 'flux', 'flux_err'] if c in group.columns]
+                group[cols_raw].to_csv(raw_csv, index=False)
+                
             total_unpacked += 1
             
-    print(f"Successfully unpacked {total_unpacked} detrended star CSVs into {output_dir}!")
+    print(f"Successfully unpacked {total_unpacked} star CSVs into {output_dir} and {raw_output_dir}!")
 
 
 if __name__ == "__main__":
