@@ -1,12 +1,46 @@
-# ==========================================
-# 🪐 ExoFinder: Git Ignore Configuration
-# ==========================================
+# ==============================================================================
+# 🪐 ExoFinder: Comprehensive Production Git Ignore Configuration
+# ==============================================================================
+
+# --- Secrets, Credentials & Environment Config ---
+.env
+.env.*
+*.env
+*.pem
+*.key
+.streamlit/secrets.toml
+
+# --- Database Files (Local SQLite & Temporary Dumps) ---
+data/*.db
+data/*.db-shm
+data/*.db-wal
+*.db
+*.sqlite
+*.sqlite3
+data/uploads/
+*.sql.gz
 
 # --- Python & Bytecode ---
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 .ipynb_checkpoints/
 
 # --- Virtual Environments ---
@@ -14,53 +48,79 @@ __pycache__/
 venv/
 env/
 ENV/
+env.bak/
+venv.bak/
 
-# --- Large Datasets & Data Cache ---
+# --- Astronomical Raw Datasets & Light Curve Caches ---
 data/raw/
 data/detrended/
 *.fits
 *.fits.gz
 *.fits.zip
-
-# --- Model Binaries & Large Outputs ---
-outputs/*.joblib
-outputs/*.h5
+*.tar.gz
+outputs/download_progress.json
 outputs/plots/
+
+# --- Model Artifacts (Trained Weights) ---
+# Allow trained models if tracked in Git LFS or repository
 !outputs/cnn_model.pt
 !outputs/model.pkl
 
-# --- Data Tables Tracking Rules ---
-# Ignore all CSV files by default to prevent accidental data leaks
+# --- Catalog & Verification Data Whitelist ---
 *.csv
-# Explicitly track only metadata and prediction results
 !data/labels.csv
 !outputs/predictions.csv
 !outputs/period_search_results.csv
 !outputs/feature_failures.csv
 !outputs/features.csv
 
-# --- IDE & Editors ---
+# --- Frontend (Node / Vite / React) ---
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- IDEs, Editors & Tooling ---
 .vscode/
 .idea/
+*.sublime-project
+*.sublime-workspace
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.swp
+*.swo
 
-# --- OS Metadata ---
+# --- Testing & Coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.nox/
+.tox/
+
+# --- OS-Generated Artifacts ---
 .DS_Store
 .DS_Store?
 ._*
 Thumbs.db
 ehthumbs.db
+[Dd]esktop.ini
 
-# --- Logs & Secrets ---
+# --- Logs ---
 *.log
-.env
-.streamlit/secrets.toml
+logs/
+LEARNING_GUIDE.md
+SCALING_ENHANCEMENTS.md
 
-# --- Reports & Documentation ---
-!reports/
-!reports/*.md
-!reports/images/*
+# --- Research Papers & Unpublished Manuscripts ---
+paper/
+scripts/
+outputs/paper_extensions_data.json
+
